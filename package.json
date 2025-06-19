@@ -1,0 +1,30 @@
+{
+  "name": "retry-service",
+  "version": "1.0.0",
+  "description": "A retry service for Node.js with support for jitter in NestJS.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.1.3"
+  },
+  "devDependencies": {
+    "@nestjs/testing": "^11.1.3",
+    "@types/jest": "^30.0.0",
+    "jest": "^30.0.2",
+    "ts-jest": "^29.4.0",
+    "typescript": "^5.8.3"
+  },
+  "keywords": [
+    "retry",
+    "retry-service",
+    "jitter",
+    "backoff",
+    "nestjs"
+  ],
+  "author": "Geovanny Ribeiro",
+  "license": "MIT"
+}
