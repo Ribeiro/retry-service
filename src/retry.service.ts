@@ -19,39 +19,76 @@ export class RetryService {
 
   async retryOperation<T>(
     operation: () => Promise<T>,
-    maxRetries?: number,
-    retryDelayMs?: number,
-    jitterFactor?: number
+    options?: {
+      maxRetries?: number;
+      retryDelayMs?: number;
+      jitterFactor?: number;
+      isRetryable?: (err: any) => boolean;
+    }
   ): Promise<T> {
-    const retries = maxRetries || this.maxRetries;
-    const delay = retryDelayMs || this.retryDelayMs;
-    const jitter = jitterFactor || this.jitterFactor;
+    const retries = options?.maxRetries ?? this.maxRetries;
+    const delay = options?.retryDelayMs ?? this.retryDelayMs;
+    const jitter = options?.jitterFactor ?? this.jitterFactor;
+    const isRetryable = options?.isRetryable ?? RetryService.isRetryableError;
+
     let attempt = 0;
-    let failedAfterSeveralAttempsMessage = "";
+    let lastError: any;
 
     while (attempt < retries) {
       try {
-        const result = await operation();
-        return result;
+        return await operation();
       } catch (err) {
+        lastError = err;
         attempt++;
-        failedAfterSeveralAttempsMessage = `Failed after attempt #: ${attempt}`;
 
-        this.logger.error(
-          `Failed on attempt #: ${attempt}. Error: ${JSON.stringify(err)}`
-        );
+        const errorMessage = `Attempt #${attempt} failed: ${JSON.stringify(err)}`;
+
+        if (!isRetryable(err)) {
+          this.logger.error(`Non-retryable error encountered: ${errorMessage}`);
+          throw err;
+        }
+
+        this.logger.warn(errorMessage);
 
         if (attempt < retries) {
           const jitteredDelay = delay + Math.random() * jitter * delay;
           await new Promise((resolve) => setTimeout(resolve, jitteredDelay));
-        } else {
-          this.logger.error(failedAfterSeveralAttempsMessage);
-          throw new Error(failedAfterSeveralAttempsMessage);
         }
       }
     }
 
-    this.logger.error(failedAfterSeveralAttempsMessage);
-    throw new Error(failedAfterSeveralAttempsMessage);
+    this.logger.error(`All ${retries} attempts failed. Last error: ${JSON.stringify(lastError)}`);
+    throw new Error(`Operation failed after ${retries} attempts.`);
+  }
+
+  private static isRetryableError(err: any): boolean {
+    if (!err || typeof err !== 'object') return false;
+
+    const retryableErrorCodes = [
+      'TimeoutError',
+      'ECONNRESET',
+      'ETIMEDOUT',
+      'EAI_AGAIN',
+      'ENOTFOUND',
+      'ECONNREFUSED',
+      'EPIPE',
+      'Throttling',
+      'TooManyRequestsException',
+      'SlowDown',
+      'RequestTimeout',
+    ];
+
+    const retryableStatusCodes = [429, 500, 502, 503, 504];
+
+    const code = err.code ?? err.name ?? err.errorCode;
+    const statusCode =
+      err.statusCode ??
+      err.$metadata?.httpStatusCode ??
+      err.response?.status;
+
+    return (
+      retryableErrorCodes.includes(code) ||
+      retryableStatusCodes.includes(statusCode)
+    );
   }
 }
